@@ -23,13 +23,21 @@
             border-radius: 0.5rem; /* Apply rounded corners to all elements by default */
         }
         /* Specific override for input fields to ensure consistent rounding */
-        input {
-            border-radius: 0.375rem; /* Smaller rounding for inputs */
+        input, select, textarea {
+            border-radius: 0.375rem; /* Smaller rounding for inputs, selects, textareas */
         }
         /* Ensure images are responsive */
         img {
             max-width: 100%;
             height: auto;
+        }
+        /* Keyframe for bounce-in-out animation */
+        @keyframes bounce-in-out {
+            0%, 100% { transform: scale(0.8) translateY(-50%); opacity: 0; }
+            50% { transform: scale(1) translateY(-50%); opacity: 1; }
+        }
+        .animate-bounce-in-out {
+            animation: bounce-in-out 0.8s ease-in-out;
         }
     </style>
 </head>
@@ -37,19 +45,164 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // Using simple text/emoji or basic inline SVGs for icons since lucide-react requires a build step.
-        // You can replace these with more sophisticated SVG icons if you generate them manually.
+        const { useState, useEffect } = React;
 
-        const { useState } = React;
+        // --- Artifacts Data Mapping ---
+        const artifactMap = {
+            'hin': { id: 'hotel', icon: '🏨', name: 'Hotel' },
+            'airport': { id: 'airport', icon: '✈️', name: 'Airport' },
+            'sarinah': { id: 'sarinah', icon: '🛒', name: 'Sarinah' },
+            'twc': { id: 'twc', icon: '🎡', name: 'TWC' },
+            'itdc': { id: 'event', icon: '🎭', name: 'Event' },
+            'ias': { id: 'lounge', icon: '💺', name: 'Lounge' },
+        };
 
-        // Main App Component
+        // --- Mission Data ---
+        const initialMissions = {
+            oneTime: [
+                { id: 'completeProfile', title: 'Complete Profile Information', description: 'Earn points for filling out your profile.', points: 2, isCompleted: false },
+                { id: 'connectSocial', title: 'Connect Social Media', description: 'Earn points for connecting your social media account.', points: 2, isCompleted: false },
+            ],
+            daily: [
+                { id: 'dailyLogin', title: 'Daily Login Streak', description: 'Log in every day to keep your streak alive!', points: 1, isCompleted: false },
+                { id: 'browseExplore', title: 'Browse Explore Page', description: 'Visit the Explore page at least once today.', points: 1, isCompleted: false },
+            ],
+            weekly: [
+                { id: 'book2Nights', title: 'Book min. 2 Hotel Nights', description: 'Earn points for booking a hotel through the app.', points: 3, isCompleted: false },
+                { id: 'spendSarinah', title: 'Spend Rp. 500.000 at Sarinah', description: 'Earn extra points for transactions at Sarinah.', points: 3, isCompleted: false },
+            ],
+            monthly: [
+                { id: 'explore3Locations', title: 'Explore 3 New Locations', description: 'Visit and check in at Borobudur, Prambanan, and Ratu Boko Temple.', points: 5, isCompleted: false },
+                { id: 'complete5Transactions', title: 'Complete 5 Transactions', description: 'Earn points for completing 5 transactions in a month.', points: 10, isCompleted: false },
+            ],
+            seasonal: [
+                { id: 'ramadhanChallenge', title: 'Ramadhan Challenge', description: 'Earn 1.5x points for transactions made between 03:00 - 05:00 during Ramadhan.', points: 0, isCompleted: false }, // Points handled by multiplier
+                { id: 'bombastisSale', title: '10.10 Bombastis Sale', description: 'Earn 10% off on hotel bookings made on 10th October. Additionally, earn +50 points for booking a hotel on this day.', points: 50, isCompleted: false },
+            ],
+            referral: [
+                { id: 'inviteFriend', title: 'Invite a Friend', description: 'Earn points for referring a friend to the platform.', points: 4, isCompleted: false },
+            ],
+            birthday: [
+                { id: 'birthdaySpecial', title: 'Birthday Special', description: 'Earn 15% off on hotel bookings on your birthday and get a special voucher.', points: 0, isCompleted: false }, // Benefits are discounts/vouchers
+            ]
+        };
+
+        // --- Tier Benefits Data ---
+        const tierBenefitsData = {
+            basic: {
+                name: 'Basic',
+                icon: '⚪',
+                benefits: [
+                    '1X Points',
+                    'Standard Rewards Catalogue',
+                    'No Priority Services'
+                ]
+            },
+            silver: {
+                name: 'Silver',
+                icon: '🥈',
+                benefits: [
+                    '1.2X Points',
+                    'Expanded Rewards Catalogue',
+                    'No Priority Services'
+                ]
+            },
+            gold: {
+                name: 'Gold',
+                icon: '🥇',
+                benefits: [
+                    '1.5X Points',
+                    'Exclusive Rewards Catalogue',
+                    'No Priority Services'
+                ]
+            },
+            platinum: {
+                name: 'Platinum',
+                icon: '💎',
+                benefits: [
+                    '2X Points',
+                    'More Exclusive Rewards Catalogue',
+                    '✅ Priority Services & Vouchers'
+                ]
+            },
+            diamond: {
+                name: 'Diamond',
+                icon: '👑',
+                benefits: [
+                    '3X Points',
+                    'Most Exclusive Rewards Catalogue',
+                    '✅ Priority Services & Vouchers'
+                ]
+            }
+        };
+
+        // --- Rewards Catalog Data ---
+        const rewardsCatalogData = {
+            airport: [
+                { id: 'freeParking', name: 'Free Parking at Airport', description: 'Enjoy complimentary parking at participating InJourney Airports.', claimed: false },
+                { id: 'dutyFreeVoucher', name: 'Voucher Airport Duty Free Rp50.000', description: 'Get a Rp50,000 discount at Airport Duty Free shops.', claimed: false },
+                { id: 'loungeAccess', name: 'Lounge Access Pass', description: 'One-time complimentary access to selected airport lounges.', claimed: false },
+            ],
+            hotel: [
+                { id: 'welcomeDrink', name: 'Complimentary Welcome Drink', description: 'Receive a free welcome drink upon check-in at any InJourney hotel.', claimed: false },
+                { id: 'lateCheckout', name: 'Late Check-out (2 PM)', description: 'Extend your stay until 2 PM at no extra charge.', claimed: false },
+                { id: 'roomUpgrade', name: 'Complimentary Room Upgrade', description: 'Subject to availability at participating hotels.', claimed: false },
+            ],
+            destination: [
+                { id: 'tmiiDiscount', name: '15% Off TMII Tickets', description: 'Get a discount on entry tickets to Taman Mini Indonesia Indah.', claimed: false },
+                { id: 'borobudurTour', name: 'Guided Borobudur Tour', description: 'Complimentary guided tour at Borobudur Temple.', claimed: false },
+                { id: 'ratubokoEntry', name: 'Free Ratu Boko Entry', description: 'Complimentary entry to Ratu Boko Temple.', claimed: false },
+            ],
+            events: [
+                { id: 'eventDiscount', name: '10% Off Event Tickets', description: 'Discount on tickets for upcoming InJourney events.', claimed: false },
+                { id: 'vipAccess', name: 'VIP Event Access', description: 'Exclusive VIP access to select InJourney events.', claimed: false },
+                { id: 'meetGreet', name: 'Artist Meet & Greet Pass', description: 'Opportunity to meet artists at select events.', claimed: false },
+            ],
+            retail: [
+                { id: 'sarinahVoucher', name: 'Rp25.000 Sarinah Voucher', description: 'Voucher for your next purchase at Sarinah stores.', claimed: false },
+                { id: 'merchandiseDiscount', name: '20% Off Official Merchandise', description: 'Discount on official InJourney merchandise.', claimed: false },
+                { id: 'foodBeverage', name: 'Free Coffee at Sarinah Cafe', description: 'Enjoy a complimentary coffee at Sarinah Cafe.', claimed: false },
+            ],
+        };
+
+
+        // --- Main App Component ---
         const App = () => {
             const [activeTab, setActiveTab] = useState('home');
             const [journeyPoints, setJourneyPoints] = useState(10000); // Initial points
             const [scanAmount, setScanAmount] = useState('');
             const [showTierBenefits, setShowTierBenefits] = useState(false);
+            const [scanOption, setScanOption] = useState('manual'); // 'manual' or 'simulate'
+            const [manualTransactionAmount, setManualTransactionAmount] = useState('');
+            const [selectedMember, setSelectedMember] = useState('sarinah'); // Default member for manual input
+            const [unlockedArtifacts, setUnlockedArtifacts] = useState(new Set()); // Stores IDs of unlocked artifacts
+            const [showArtifactEarnedMessage, setShowArtifactEarnedMessage] = useState(false);
+            const [earnedArtifactDetails, setEarnedArtifactDetails] = useState({ icon: '', name: '' });
 
-            // Sample data for Explore section
+            // --- Dream & Plan State ---
+            const [tripName, setTripName] = useState('');
+            const [startDate, setStartDate] = useState('');
+            const [endDate, setEndDate] = useState('');
+            const [hotelName, setHotelName] = useState('');
+            const [airlineName, setAirlineName] = useState('');
+            const [tripDescription, setTripDescription] = useState('');
+            const [savedItineraries, setSavedItineraries] = useState([]);
+
+            // --- Notification Sub-view State ---
+            const [notificationSubView, setNotificationSubView] = useState('main'); // 'main', 'rewards', 'info'
+
+            // --- Missions State ---
+            const [missions, setMissions] = useState(initialMissions);
+            const [lastDailyReset, setLastDailyReset] = useState('');
+            const [lastWeeklyReset, setLastWeeklyReset] = useState('');
+            const [lastMonthlyReset, setLastMonthlyReset] = useState('');
+
+            // --- Profile Tab Specific States ---
+            const [selectedTier, setSelectedTier] = useState('gold'); // Default to Gold tier
+            const [selectedRewardCategory, setSelectedRewardCategory] = useState('airport'); // Default to Airport rewards
+
+
+            // Sample data for Explore section (unchanged)
             const destinations = [
                 { name: 'Sarinah Thamrin', description: 'Iconic retail and cultural hub.', category: 'retail', mapLink: 'https://maps.app.goo.gl/ABCDEF12345' },
                 { name: 'The Meru Sanur', description: 'Luxury beachfront resort in Bali.', category: 'hotels', mapLink: 'https://maps.app.goo.gl/GHIJKL67890' },
@@ -59,37 +212,101 @@
                 { name: 'Taman Mini Indonesia Indah (TMII)', description: 'Cultural park showcasing Indonesian heritage.', category: 'destinations', mapLink: 'https://maps.app.goo.gl/EFGHIJ99001' },
                 { name: 'Bali Arts Festival', description: 'Annual cultural event in Bali.', category: 'events', mapLink: 'https://maps.app.goo.gl/KLMNOP22334' },
             ];
-
             const [filteredDestinations, setFilteredDestinations] = useState(destinations);
             const [exploreCategory, setExploreCategory] = useState('all');
 
-            // Filter destinations based on category
-            const handleCategoryFilter = (category) => {
-                setExploreCategory(category);
-                if (category === 'all') {
-                    setFilteredDestinations(destinations);
-                } else {
-                    setFilteredDestinations(destinations.filter(d => d.category === category));
+            // --- Local Storage Effects ---
+            useEffect(() => {
+                // Load saved itineraries from local storage
+                const storedItineraries = localStorage.getItem('injourneyItineraries');
+                if (storedItineraries) {
+                    setSavedItineraries(JSON.parse(storedItineraries));
                 }
-            };
+                // Load unlocked artifacts from local storage
+                const storedArtifacts = localStorage.getItem('injourneyArtifacts');
+                if (storedArtifacts) {
+                    setUnlockedArtifacts(new Set(JSON.parse(storedArtifacts)));
+                }
+                // Load missions state from local storage
+                const storedMissions = localStorage.getItem('injourneyMissions');
+                if (storedMissions) {
+                    setMissions(JSON.parse(storedMissions));
+                }
+                // Load last reset dates
+                setLastDailyReset(localStorage.getItem('lastDailyReset') || '');
+                setLastWeeklyReset(localStorage.getItem('lastWeeklyReset') || '');
+                setLastMonthlyReset(localStorage.getItem('lastMonthlyReset') || '');
+            }, []);
 
-            // Simulate QR/Receipt Scan for points
-            const convertToPoints = () => {
-                const amount = parseFloat(scanAmount);
-                if (isNaN(amount) || amount <= 0) {
-                    // Using a simple message box instead of alert()
-                    document.getElementById('messageBox').innerText = 'Please enter a valid amount.';
-                    document.getElementById('messageBox').classList.remove('hidden');
-                    setTimeout(() => document.getElementById('messageBox').classList.add('hidden'), 3000);
-                    return;
+            useEffect(() => {
+                // Save itineraries to local storage whenever they change
+                localStorage.setItem('injourneyItineraries', JSON.stringify(savedItineraries));
+            }, [savedItineraries]);
+
+            useEffect(() => {
+                // Save unlocked artifacts to local storage whenever they change
+                localStorage.setItem('injourneyArtifacts', JSON.stringify(Array.from(unlockedArtifacts)));
+            }, [unlockedArtifacts]);
+
+            useEffect(() => {
+                // Save missions to local storage whenever they change
+                localStorage.setItem('injourneyMissions', JSON.stringify(missions));
+            }, [missions]);
+
+            // --- Mission Reset Logic ---
+            useEffect(() => {
+                const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+                const currentDayOfWeek = new Date().getDay(); // 0 for Sunday, 1 for Monday
+                const currentDayOfMonth = new Date().getDate(); // 1-31
+
+                // Daily Reset
+                if (lastDailyReset !== today) {
+                    setMissions(prevMissions => ({
+                        ...prevMissions,
+                        daily: prevMissions.daily.map(m => ({ ...m, isCompleted: false }))
+                    }));
+                    setLastDailyReset(today);
+                    localStorage.setItem('lastDailyReset', today);
                 }
-                const pointsEarned = Math.floor(amount / 100000); // Rp.100,000 = 1 point
-                setJourneyPoints(prevPoints => prevPoints + pointsEarned);
-                // Using a simple message box instead of alert()
-                document.getElementById('messageBox').innerText = `You earned ${pointsEarned} Journey Points! Total points: ${journeyPoints + pointsEarned}`;
-                document.getElementById('messageBox').classList.remove('hidden');
-                setTimeout(() => document.getElementById('messageBox').classList.add('hidden'), 3000);
-                setScanAmount('');
+
+                // Weekly Reset (e.g., every Monday)
+                if (currentDayOfWeek === 1 && lastWeeklyReset !== today) { // Reset on Monday
+                    setMissions(prevMissions => ({
+                        ...prevMissions,
+                        weekly: prevMissions.weekly.map(m => ({ ...m, isCompleted: false }))
+                    }));
+                    setLastWeeklyReset(today);
+                    localStorage.setItem('lastWeeklyReset', today);
+                }
+
+                // Monthly Reset (e.g., on the 1st of the month)
+                if (currentDayOfMonth === 1 && lastMonthlyReset !== today) { // Reset on 1st of month
+                    setMissions(prevMissions => ({
+                        ...prevMissions,
+                        monthly: prevMissions.monthly.map(m => ({ ...m, isCompleted: false }))
+                    }));
+                    setLastMonthlyReset(today);
+                    localStorage.setItem('lastMonthlyReset', today);
+                }
+            }, [lastDailyReset, lastWeeklyReset, lastMonthlyReset]);
+
+
+            // --- Utility Functions ---
+
+            // Function to show temporary message
+            const showMessage = (text, type = 'info') => {
+                const messageBox = document.getElementById('messageBox');
+                messageBox.innerText = text;
+                messageBox.className = `fixed top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 text-center transition-opacity duration-300 ${
+                    type === 'error' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
+                }`;
+                messageBox.classList.remove('hidden', 'opacity-0');
+                messageBox.classList.add('opacity-100');
+                setTimeout(() => {
+                    messageBox.classList.remove('opacity-100');
+                    messageBox.classList.add('opacity-0');
+                    setTimeout(() => messageBox.classList.add('hidden'), 300); // Hide after fade out
+                }, 3000);
             };
 
             // Common Card Component
@@ -100,8 +317,13 @@
             );
 
             // Section Header Component (using text for icon)
-            const SectionHeader = ({ title, iconText }) => (
+            const SectionHeader = ({ title, iconText, onBack }) => (
                 <div className="flex items-center space-x-2 mb-4">
+                    {onBack && (
+                        <button onClick={onBack} className="text-gray-600 hover:text-gray-800 mr-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                        </button>
+                    )}
                     {iconText && <span className="text-indigo-600 text-2xl">{iconText}</span>}
                     <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
                 </div>
@@ -120,13 +342,102 @@
                 </button>
             );
 
-            // Simple Arrow Icon
+            // Simple Arrow Icon (inline SVG)
             const ChevronRight = () => (
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500"><path d="m9 18 6-6-6-6"/></svg>
             );
 
+            // --- Dream & Plan Logic ---
+            const saveItinerary = () => {
+                if (!tripName || !startDate || !endDate || !hotelName || !airlineName || !tripDescription) {
+                    showMessage('Please fill in all itinerary fields.', 'error');
+                    return;
+                }
 
-            // Render content based on active tab
+                const newItinerary = {
+                    id: Date.now(), // Unique ID for the itinerary
+                    tripName,
+                    startDate,
+                    endDate,
+                    hotelName,
+                    airlineName,
+                    tripDescription,
+                };
+
+                setSavedItineraries(prev => [...prev, newItinerary]);
+                showMessage('Your itinerary has been saved!');
+                resetItineraryForm();
+            };
+
+            const resetItineraryForm = () => {
+                setTripName('');
+                setStartDate('');
+                setEndDate('');
+                setHotelName('');
+                setAirlineName('');
+                setTripDescription('');
+            };
+
+            const deleteItinerary = (id) => {
+                setSavedItineraries(prev => prev.filter(itinerary => itinerary.id !== id));
+                showMessage('Itinerary deleted.');
+            };
+
+            // --- Scan Feature Logic ---
+            const handleTransactionSubmit = (amount, memberKey) => {
+                const transactionAmount = parseFloat(amount);
+                if (isNaN(transactionAmount) || transactionAmount <= 0) {
+                    showMessage('Please enter a valid transaction amount.', 'error');
+                    return;
+                }
+
+                let pointsEarned = 0;
+                let artifactToUnlock = null;
+
+                if (transactionAmount >= 100000) {
+                    pointsEarned = Math.floor(transactionAmount / 100000);
+                    artifactToUnlock = artifactMap[memberKey];
+                } else {
+                    pointsEarned = 10; // Fixed 10 points for transactions < Rp 100,000
+                }
+
+                if (pointsEarned < 1 && transactionAmount >= 100000) { // Only show error if above 100k but points are 0
+                    showMessage('Transaction amount is too low to earn points (min Rp 100,000).', 'error');
+                    return;
+                }
+
+                setJourneyPoints(prevPoints => prevPoints + pointsEarned);
+                showMessage(`You earned ${pointsEarned} Journey Points at ${artifactMap[memberKey].name}!`);
+
+                // Unlock artifact if applicable and not already unlocked
+                if (artifactToUnlock && !unlockedArtifacts.has(artifactToUnlock.id)) {
+                    setUnlockedArtifacts(prev => new Set(prev).add(artifactToUnlock.id));
+                    setEarnedArtifactDetails({
+                        icon: artifactToUnlock.icon,
+                        name: artifactToUnlock.name
+                    });
+                    setShowArtifactEarnedMessage(true);
+                    setTimeout(() => setShowArtifactEarnedMessage(false), 5000); // Hide after 5 seconds
+                }
+
+                // Reset inputs
+                setManualTransactionAmount('');
+                setScanAmount('');
+            };
+
+            // --- Mission Logic ---
+            const completeMission = (category, missionId, points) => {
+                setMissions(prevMissions => {
+                    const updatedCategory = prevMissions[category].map(m =>
+                        m.id === missionId ? { ...m, isCompleted: true } : m
+                    );
+                    return { ...prevMissions, [category]: updatedCategory };
+                });
+                setJourneyPoints(prevPoints => prevPoints + points);
+                showMessage(`Mission completed! You earned ${points} Journey Points.`);
+            };
+
+            // --- Render Content Based on Active Tab ---
             const renderContent = () => {
                 switch (activeTab) {
                     case 'home':
@@ -172,33 +483,64 @@
                                         </button>
                                     </Card>
 
+                                    {/* Missions Card */}
                                     <Card>
                                         <div className="flex items-center mb-2">
                                             <span className="text-green-500 mr-2 text-xl">🎯</span>
                                             <h4 className="font-semibold text-gray-800">Missions</h4>
                                         </div>
-                                        <p className="text-sm text-gray-600 mb-2">Complete daily, weekly, and seasonal missions to earn points!</p>
-                                        <ul className="list-disc list-inside text-sm text-gray-700">
-                                            <li>Daily Login Streak</li>
-                                            <li>Visit an InJourney Destination</li>
-                                            <li>Redeem a Reward</li>
-                                        </ul>
-                                        <button className="w-full mt-4 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 transition-colors">
-                                            View Missions
-                                        </button>
+                                        <p className="text-sm text-gray-600 mb-2">Complete tasks to earn points!</p>
+                                        <div className="space-y-3">
+                                            {Object.keys(missions).map(category => (
+                                                <div key={category}>
+                                                    <h5 className="font-semibold text-gray-700 capitalize mb-1">{category.replace(/([A-Z])/g, ' $1').trim()} Missions</h5>
+                                                    <div className="space-y-2">
+                                                        {missions[category].map(mission => (
+                                                            <div key={mission.id} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded-md">
+                                                                <div>
+                                                                    <p className="font-medium">{mission.title}</p>
+                                                                    <p className="text-xs text-gray-600">{mission.description}</p>
+                                                                </div>
+                                                                {mission.isCompleted ? (
+                                                                    <span className="text-green-500 text-xl">✅</span>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => completeMission(category, mission.id, mission.points)}
+                                                                        className="bg-indigo-500 text-white px-3 py-1 rounded-md text-xs hover:bg-indigo-600 transition-colors"
+                                                                    >
+                                                                        Complete (+{mission.points})
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </Card>
 
-                                    <Card>
+                                    {/* Artifacts Card */}
+                                    <Card onClick={() => setActiveTab('profile')} className="cursor-pointer hover:bg-gray-50 transition-colors">
                                         <div className="flex items-center mb-2">
                                             <span className="text-yellow-500 mr-2 text-xl">🏆</span>
                                             <h4 className="font-semibold text-gray-800">Artifacts</h4>
                                         </div>
                                         <p className="text-sm text-gray-600 mb-2">Collect unique visual badges from your journeys!</p>
-                                        <ul className="list-disc list-inside text-sm text-gray-700">
-                                            <li>Airport Explorer Badge</li>
-                                            <li>Heritage Site Guardian</li>
-                                            <li>Retail Enthusiast</li>
-                                        </ul>
+                                        <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                            {Array.from(unlockedArtifacts).length > 0 ? (
+                                                Array.from(unlockedArtifacts).slice(0, 6).map(artifactId => { // Show max 6 on home
+                                                    const artifact = Object.values(artifactMap).find(a => a.id === artifactId);
+                                                    return artifact ? (
+                                                        <div key={artifact.id} className="flex flex-col items-center p-1 bg-gray-50 rounded-md shadow-sm">
+                                                            <span className="text-3xl">{artifact.icon}</span>
+                                                            <span className="text-xs text-center mt-1 font-medium">{artifact.name}</span>
+                                                        </div>
+                                                    ) : null;
+                                                })
+                                            ) : (
+                                                <p className="text-sm text-gray-600 col-span-full text-center">No artifacts collected yet.</p>
+                                            )}
+                                        </div>
                                         <button className="w-full mt-4 bg-yellow-600 text-white py-2 rounded-md hover:bg-yellow-700 transition-colors">
                                             My Collection
                                         </button>
@@ -210,14 +552,63 @@
                                             <h4 className="font-semibold text-gray-800">Dream & Plan</h4>
                                         </div>
                                         <p className="text-sm text-gray-600 mb-2">Plan your next adventure with our itinerary builder.</p>
-                                        <ul className="list-disc list-inside text-sm text-gray-700">
-                                            <li>Create custom itineraries</li>
-                                            <li>Discover new places</li>
-                                            <li>Share with friends</li>
-                                        </ul>
-                                        <button className="w-full mt-4 bg-red-600 text-white py-2 rounded-md hover:bg-red-700 transition-colors">
-                                            Start Planning
-                                        </button>
+
+                                        {/* Itinerary Form */}
+                                        <div className="space-y-3 mb-4">
+                                            <div>
+                                                <label htmlFor="tripName" className="block text-sm font-medium text-gray-700 mb-1">Trip Name</label>
+                                                <input type="text" id="tripName" value={tripName} onChange={(e) => setTripName(e.target.value)} placeholder="e.g., Bali Vacation" className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400" />
+                                            </div>
+                                            <div>
+                                                <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                                <input type="date" id="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400" />
+                                            </div>
+                                            <div>
+                                                <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                                <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400" />
+                                            </div>
+                                            <div>
+                                                <label htmlFor="hotelName" className="block text-sm font-medium text-gray-700 mb-1">Hotel Name</label>
+                                                <input type="text" id="hotelName" value={hotelName} onChange={(e) => setHotelName(e.target.value)} placeholder="e.g., The Meru Sanur" className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400" />
+                                            </div>
+                                            <div>
+                                                <label htmlFor="airlineName" className="block text-sm font-medium text-gray-700 mb-1">Airline Name</label>
+                                                <input type="text" id="airlineName" value={airlineName} onChange={(e) => setAirlineName(e.target.value)} placeholder="e.g., Garuda Indonesia" className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400" />
+                                            </div>
+                                            <div>
+                                                <label htmlFor="tripDescription" className="block text-sm font-medium text-gray-700 mb-1">Short Description</label>
+                                                <textarea id="tripDescription" value={tripDescription} onChange={(e) => setTripDescription(e.target.value)} placeholder="e.g., Exploring beaches and temples." rows="3" className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-400"></textarea>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={saveItinerary} className="w-full bg-red-600 text-white py-2 rounded-md hover:bg-red-700 transition-colors">
+                                                Save Itinerary
+                                            </button>
+                                            <button onClick={resetItineraryForm} className="w-full bg-gray-400 text-white py-2 rounded-md hover:bg-gray-500 transition-colors">
+                                                Reset
+                                            </button>
+                                        </div>
+
+                                        {/* Saved Itineraries Display */}
+                                        <h5 className="font-semibold text-gray-800 mt-6 mb-3">My Saved Itineraries</h5>
+                                        {savedItineraries.length === 0 ? (
+                                            <p className="text-sm text-gray-600">No itineraries saved yet.</p>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {savedItineraries.map(itinerary => (
+                                                    <div key={itinerary.id} className="border border-gray-200 p-3 rounded-md bg-gray-50">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <h6 className="font-bold text-gray-800">{itinerary.tripName}</h6>
+                                                            <button onClick={() => deleteItinerary(itinerary.id)} className="text-red-500 hover:text-red-700 text-sm">Delete</button>
+                                                        </div>
+                                                        <p className="text-xs text-gray-600">Dates: {itinerary.startDate} to {itinerary.endDate}</p>
+                                                        <p className="text-xs text-gray-600">Hotel: {itinerary.hotelName}</p>
+                                                        <p className="text-xs text-gray-600">Airline: {itinerary.airlineName}</p>
+                                                        <p className="text-xs text-gray-700 mt-1 line-clamp-2">{itinerary.tripDescription}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </Card>
                                 </div>
                             </div>
@@ -270,25 +661,80 @@
                             <div className="p-4 md:p-6 flex flex-col items-center justify-center min-h-[calc(100vh-120px)]">
                                 <SectionHeader title="Scan & Earn" iconText="📱" />
                                 <Card className="w-full max-w-md text-center">
-                                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Convert Transactions to Points</h3>
-                                    <p className="text-gray-600 mb-6">Enter your transaction amount to earn Journey Points.</p>
-                                    <div className="mb-4">
-                                        <label htmlFor="scanAmount" className="sr-only">Transaction Amount (Rp)</label>
-                                        <input
-                                            id="scanAmount"
-                                            type="number"
-                                            placeholder="e.g., 150000 (Rp. 100.000 = 1 point)"
-                                            value={scanAmount}
-                                            onChange={(e) => setScanAmount(e.target.value)}
-                                            className="w-full p-3 border border-gray-300 rounded-lg text-center text-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                                        />
+                                    <h3 className="text-xl font-semibold text-gray-800 mb-4">Choose Transaction Option</h3>
+
+                                    <div className="flex justify-center gap-4 mb-6">
+                                        <button
+                                            onClick={() => setScanOption('simulate')}
+                                            className={`px-4 py-2 rounded-md font-semibold transition-colors duration-200 ${
+                                                scanOption === 'simulate' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            Simulate Scan Receipt
+                                        </button>
+                                        <button
+                                            onClick={() => setScanOption('manual')}
+                                            className={`px-4 py-2 rounded-md font-semibold transition-colors duration-200 ${
+                                                scanOption === 'manual' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                        >
+                                            Input Manually
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={convertToPoints}
-                                        className="w-full bg-indigo-600 text-white py-3 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors shadow-lg"
-                                    >
-                                        Convert to Points
-                                    </button>
+
+                                    {scanOption === 'simulate' && (
+                                        <div className="mb-4">
+                                            <h4 className="text-lg font-medium text-gray-700 mb-3">Simulated Receipt</h4>
+                                            <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg text-left mb-4">
+                                                <p className="text-sm text-gray-600">Merchant: InJourney Cafe</p>
+                                                <p className="text-sm text-gray-600">Date: {new Date().toLocaleDateString()}</p>
+                                                <p className="text-sm text-gray-600">Items: Coffee, Pastry</p>
+                                                <p className="text-lg font-bold text-gray-800 mt-2">Total: Rp 250,000</p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleTransactionSubmit(250000, 'sarinah')} // Simulate a Sarinah transaction
+                                                className="w-full bg-indigo-600 text-white py-3 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors shadow-lg"
+                                            >
+                                                Process Simulated Receipt
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {scanOption === 'manual' && (
+                                        <div>
+                                            <h4 className="text-lg font-medium text-gray-700 mb-3">Input Transaction Details</h4>
+                                            <div className="mb-4">
+                                                <label htmlFor="manualAmount" className="block text-sm font-medium text-gray-700 text-left mb-1">Transaction Amount (Rp)</label>
+                                                <input
+                                                    id="manualAmount"
+                                                    type="number"
+                                                    placeholder="e.g., 150000"
+                                                    value={manualTransactionAmount}
+                                                    onChange={(e) => setManualTransactionAmount(e.target.value)}
+                                                    className="w-full p-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                                />
+                                            </div>
+                                            <div className="mb-6">
+                                                <label htmlFor="memberSelect" className="block text-sm font-medium text-gray-700 text-left mb-1">Participating Member</label>
+                                                <select
+                                                    id="memberSelect"
+                                                    value={selectedMember}
+                                                    onChange={(e) => setSelectedMember(e.target.value)}
+                                                    className="w-full p-3 border border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                                                >
+                                                    {Object.keys(artifactMap).map(key => (
+                                                        <option key={key} value={key}>{artifactMap[key].name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <button
+                                                onClick={() => handleTransactionSubmit(manualTransactionAmount, selectedMember)}
+                                                className="w-full bg-indigo-600 text-white py-3 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition-colors shadow-lg"
+                                            >
+                                                Submit Transaction
+                                            </button>
+                                        </div>
+                                    )}
                                 </Card>
                             </div>
                         );
@@ -296,33 +742,94 @@
                     case 'notification':
                         return (
                             <div className="p-4 md:p-6">
-                                <SectionHeader title="Notifications" iconText="🔔" />
-                                <div className="space-y-4">
-                                    <Card>
-                                        <div className="flex items-center mb-2">
-                                            <span className="text-purple-500 mr-2 text-xl">🔔</span>
-                                            <h4 className="font-semibold text-gray-800">Vouchers & Benefits</h4>
+                                {notificationSubView === 'main' && (
+                                    <>
+                                        <SectionHeader title="Notifications" iconText="🔔" />
+                                        <div className="space-y-4">
+                                            {/* Rewards & Benefits Section */}
+                                            <Card onClick={() => setNotificationSubView('rewards')} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center">
+                                                        <span className="text-purple-500 mr-2 text-xl">🎁</span> {/* Changed icon to gift */}
+                                                        <h4 className="font-semibold text-gray-800">Rewards & Benefits</h4>
+                                                    </div>
+                                                    <ChevronRight />
+                                                </div>
+                                                <p className="text-sm text-gray-600">View your available rewards and exclusive benefits.</p>
+                                            </Card>
+
+                                            {/* InJourney Information Section */}
+                                            <Card onClick={() => setNotificationSubView('info')} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center">
+                                                        <span className="text-orange-500 mr-2 text-xl">📣</span> {/* Changed icon to megaphone */}
+                                                        <h4 className="font-semibold text-gray-800">InJourney Information</h4>
+                                                    </div>
+                                                    <ChevronRight />
+                                                </div>
+                                                <p className="text-sm text-gray-600">Stay updated with the latest news and promotions.</p>
+                                            </Card>
+
+                                            {/* Transaction Section (always visible) */}
+                                            <h3 className="text-xl font-bold text-gray-800 mt-6 mb-4">Transactions</h3>
+                                            <Card>
+                                                <div className="flex items-center mb-2">
+                                                    <span className="text-teal-500 mr-2 text-xl">💸</span> {/* Changed icon to money bag */}
+                                                    <h4 className="font-semibold text-gray-800">Latest Activity</h4>
+                                                </div>
+                                                <ul className="text-sm text-gray-700 space-y-1">
+                                                    <li><span className="font-medium">[7 Aug 2025]</span> - Claimed Voucher Duty Free Rp50.000</li>
+                                                    <li><span className="font-medium">[6 Aug 2025]</span> - Earned 50 points at The Meru Sanur</li>
+                                                    <li><span className="font-medium">[5 Aug 2025]</span> - Earned 10 points (transaction below Rp 100,000)</li>
+                                                </ul>
+                                                <button className="mt-4 text-teal-600 text-sm font-medium hover:underline">View All Transactions</button>
+                                            </Card>
                                         </div>
-                                        <p className="text-sm text-gray-600">You have new exclusive vouchers waiting for you! Check them out now.</p>
-                                        <button className="mt-2 text-purple-600 text-sm font-medium hover:underline">View Vouchers</button>
-                                    </Card>
-                                    <Card>
-                                        <div className="flex items-center mb-2">
-                                            <span className="text-teal-500 mr-2 text-xl">🗓️</span>
-                                            <h4 className="font-semibold text-gray-800">Transaction Information</h4>
+                                    </>
+                                )}
+
+                                {notificationSubView === 'rewards' && (
+                                    <>
+                                        <SectionHeader title="Rewards & Benefits" iconText="🎁" onBack={() => setNotificationSubView('main')} />
+                                        <div className="space-y-4">
+                                            <Card>
+                                                <h4 className="font-semibold text-gray-800 mb-2">Free Parking at Airport</h4>
+                                                <p className="text-sm text-gray-600 mb-3">Enjoy complimentary parking at participating InJourney Airports.</p>
+                                                <button className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors">Claim</button>
+                                            </Card>
+                                            <Card>
+                                                <h4 className="font-semibold text-gray-800 mb-2">Voucher Airport Duty Free Rp50.000</h4>
+                                                <p className="text-sm text-gray-600 mb-3">Get a Rp50,000 discount at Airport Duty Free shops.</p>
+                                                <button className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors">Claim</button>
+                                            </Card>
+                                            <Card>
+                                                <h4 className="font-semibold text-gray-800 mb-2">10% Off Sarinah Retail</h4>
+                                                <p className="text-sm text-gray-600 mb-3">Exclusive discount for your next purchase at Sarinah.</p>
+                                                <button className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors">Claim</button>
+                                            </Card>
                                         </div>
-                                        <p className="text-sm text-gray-600">Your recent transaction at Sarinah Thamrin has earned you 5 Journey Points.</p>
-                                        <button className="mt-2 text-teal-600 text-sm font-medium hover:underline">View Details</button>
-                                    </Card>
-                                    <Card>
-                                        <div className="flex items-center mb-2">
-                                            <span className="text-orange-500 mr-2 text-xl">ℹ️</span>
-                                            <h4 className="font-semibold text-gray-800">InJourney Information</h4>
+                                    </>
+                                )}
+
+                                {notificationSubView === 'info' && (
+                                    <>
+                                        <SectionHeader title="InJourney Information" iconText="📣" onBack={() => setNotificationSubView('main')} />
+                                        <div className="space-y-4">
+                                            <Card>
+                                                <h4 className="font-semibold text-gray-800 mb-2">Complete Your Profile!</h4>
+                                                <p className="text-sm text-gray-600">Ensure your profile is fully updated to receive special rewards and personalized offers from InJourney.</p>
+                                            </Card>
+                                            <Card>
+                                                <h4 className="font-semibold text-gray-800 mb-2">2025 MotoGP World Championship Tickets!</h4>
+                                                <p className="text-sm text-gray-600">Don't miss out! Secure your tickets for the thrilling 2025 MotoGP World Championship now.</p>
+                                            </Card>
+                                            <Card>
+                                                <h4 className="font-semibold text-gray-800 mb-2">New Destination: Labuan Bajo</h4>
+                                                <p className="text-sm text-gray-600">Discover the breathtaking beauty of Labuan Bajo, now part of the InJourney ecosystem. Plan your trip today!</p>
+                                            </Card>
                                         </div>
-                                        <p className="text-sm text-gray-600">Exciting new destinations and events are coming soon to InJourney Rewards!</p>
-                                        <button className="mt-2 text-orange-600 text-sm font-medium hover:underline">Read More</button>
-                                    </Card>
-                                </div>
+                                    </>
+                                )}
                             </div>
                         );
 
@@ -349,56 +856,122 @@
                                     </button>
                                     {showTierBenefits && (
                                         <div className="mt-4 p-3 bg-white bg-opacity-30 rounded-md">
-                                            <p className="text-sm">Gold Tier Benefits include:</p>
-                                            <ul className="list-disc list-inside text-xs">
-                                                <li>Exclusive lounge access</li>
-                                                <li>Priority hotel check-in</li>
-                                                <li>Bonus points on all transactions</li>
-                                            </ul>
+                                            <h4 className="text-lg font-bold mb-3">Membership Tier Benefits</h4>
+                                            {/* Tier Icons */}
+                                            <div className="flex justify-around items-center mb-4">
+                                                {Object.keys(tierBenefitsData).map(tierKey => (
+                                                    <button
+                                                        key={tierKey}
+                                                        onClick={() => setSelectedTier(tierKey)}
+                                                        className={`flex flex-col items-center p-2 rounded-full transition-all duration-200
+                                                            ${selectedTier === tierKey ? 'bg-white text-indigo-700 scale-110 shadow-lg' : 'text-white hover:bg-white hover:bg-opacity-20'}`}
+                                                    >
+                                                        <span className="text-3xl">{tierBenefitsData[tierKey].icon}</span>
+                                                        <span className="text-xs font-medium mt-1">{tierBenefitsData[tierKey].name}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {/* Selected Tier Benefits */}
+                                            {selectedTier && (
+                                                <div className="bg-white p-4 rounded-md text-gray-800 shadow-inner">
+                                                    <h5 className="font-bold text-lg mb-2">{tierBenefitsData[selectedTier].name} Tier Benefits:</h5>
+                                                    <ul className="list-disc list-inside text-sm space-y-1">
+                                                        {tierBenefitsData[selectedTier].benefits.map((benefit, index) => (
+                                                            <li key={index}>{benefit}</li>
+                                                        ))}
+                                                    </ul>
+                                                    {['basic', 'silver', 'gold'].includes(selectedTier) && (
+                                                        <p className="text-xs text-gray-500 mt-2">
+                                                            *Priority Services & Vouchers are only available for Platinum & Diamond tiers.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </Card>
 
-                                {/* Rewards Catalog */}
+                                {/* Rewards Categories (Interactive Icons) */}
                                 <h3 className="text-xl font-bold text-gray-800 mb-4">Rewards Catalog</h3>
                                 <Card className="mb-6">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h4 className="font-semibold text-gray-800">My Rewards</h4>
-                                        <ChevronRight />
+                                    <div className="flex flex-wrap justify-around gap-2 mb-4">
+                                        {Object.keys(rewardsCatalogData).map(categoryKey => (
+                                            <button
+                                                key={categoryKey}
+                                                onClick={() => setSelectedRewardCategory(categoryKey)}
+                                                className={`flex flex-col items-center p-2 rounded-lg transition-colors duration-200
+                                                    ${selectedRewardCategory === categoryKey ? 'bg-indigo-100 text-indigo-700 shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                                            >
+                                                <span className="text-2xl mb-1">
+                                                    {categoryKey === 'airport' && '🛫'}
+                                                    {categoryKey === 'hotel' && '🏨'}
+                                                    {categoryKey === 'destination' && '🗺️'}
+                                                    {categoryKey === 'events' && '🎉'}
+                                                    {categoryKey === 'retail' && '🛍️'}
+                                                </span>
+                                                <span className="text-xs font-medium capitalize">{categoryKey}</span>
+                                            </button>
+                                        ))}
                                     </div>
-                                    <p className="text-sm text-gray-600">No rewards redeemed yet. Start exploring!</p>
-                                </Card>
-                                <div className="flex flex-wrap justify-around gap-2 mb-6">
-                                    {[
-                                        { label: 'Airport', icon: '✈️' },
-                                        { label: 'Hotel', icon: '🏨' },
-                                        { label: 'Destination', icon: '📍' },
-                                        { label: 'Events', icon: '🎉' },
-                                        { label: 'Retail', icon: '🛍️' },
-                                    ].map((cat, index) => (
-                                        <div key={index} className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
-                                            <span className="text-2xl text-indigo-600 mb-1">{cat.icon}</span>
-                                            <span className="text-xs text-gray-700">{cat.label}</span>
+
+                                    {/* Display Rewards for Selected Category */}
+                                    {selectedRewardCategory && (
+                                        <div className="space-y-3">
+                                            <h4 className="font-semibold text-gray-800 mb-2 capitalize">{rewardsCatalogData[selectedRewardCategory].length > 0 ? `${selectedRewardCategory} Rewards` : `No ${selectedRewardCategory} Rewards Available`}</h4>
+                                            {rewardsCatalogData[selectedRewardCategory].length > 0 ? (
+                                                rewardsCatalogData[selectedRewardCategory].map(reward => (
+                                                    <div key={reward.id} className="border border-gray-200 p-3 rounded-md bg-gray-50 flex justify-between items-center">
+                                                        <div>
+                                                            <h5 className="font-medium text-gray-800">{reward.name}</h5>
+                                                            <p className="text-xs text-gray-600">{reward.description}</p>
+                                                        </div>
+                                                        <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors">Claim</button>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <p className="text-sm text-gray-600 text-center">Check back later for more rewards!</p>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
+                                    )}
+                                </Card>
+
 
                                 {/* For More Value */}
                                 <h3 className="text-xl font-bold text-gray-800 mb-4">For More Value</h3>
                                 <div className="space-y-3 mb-6">
-                                    <Card className="flex items-center justify-between">
-                                        <div className="flex items-center">
-                                            <span className="text-green-500 mr-2 text-xl">🎯</span>
-                                            <h4 className="font-semibold text-gray-800">Missions</h4>
+                                    <Card onClick={() => setActiveTab('home')}> {/* Link to home for missions */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center">
+                                                <span className="text-green-500 mr-2 text-xl">🎯</span>
+                                                <h4 className="font-semibold text-gray-800">Missions</h4>
+                                            </div>
+                                            <ChevronRight />
                                         </div>
-                                        <ChevronRight />
                                     </Card>
-                                    <Card className="flex items-center justify-between">
-                                        <div className="flex items-center">
-                                            <span className="text-yellow-500 mr-2 text-xl">🏆</span>
-                                            <h4 className="font-semibold text-gray-800">Artifacts</h4>
+                                    {/* Artifacts Collection Page */}
+                                    <Card>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center">
+                                                <span className="text-yellow-500 mr-2 text-xl">🏆</span>
+                                                <h4 className="font-semibold text-gray-800">Artifacts Collection</h4>
+                                            </div>
+                                            <ChevronRight />
                                         </div>
-                                        <ChevronRight />
+                                        <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                                            {Array.from(unlockedArtifacts).length > 0 ? (
+                                                Array.from(unlockedArtifacts).map(artifactId => {
+                                                    const artifact = Object.values(artifactMap).find(a => a.id === artifactId);
+                                                    return artifact ? (
+                                                        <div key={artifact.id} className="flex flex-col items-center p-2 bg-gray-50 rounded-md shadow-sm">
+                                                            <span className="text-4xl">{artifact.icon}</span>
+                                                            <span className="text-xs text-center mt-1 font-medium">{artifact.name}</span>
+                                                        </div>
+                                                    ) : null;
+                                                })
+                                            ) : (
+                                                <p className="text-sm text-gray-600 col-span-full text-center">No artifacts collected yet. Make transactions to earn them!</p>
+                                            )}
+                                        </div>
                                     </Card>
                                 </div>
 
@@ -453,7 +1026,16 @@
             return (
                 <div className="min-h-screen bg-gray-100 font-sans antialiased flex flex-col">
                     {/* Message Box for alerts */}
-                    <div id="messageBox" className="hidden fixed top-4 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-center"></div>
+                    <div id="messageBox" className="hidden fixed top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 text-center"></div>
+
+                    {/* Artifact Earned Notification */}
+                    {showArtifactEarnedMessage && (
+                        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-green-600 text-white px-8 py-6 rounded-xl shadow-2xl z-50 flex flex-col items-center justify-center animate-bounce-in-out">
+                            <span className="text-6xl mb-3">{earnedArtifactDetails.icon}</span>
+                            <p className="text-xl font-bold">You earned a new artifact!</p>
+                            <p className="text-lg mt-1">{earnedArtifactDetails.name} Badge</p>
+                        </div>
+                    )}
 
                     {/* Header */}
                     <header className="bg-white shadow-sm p-4 sticky top-0 z-10">
@@ -471,7 +1053,7 @@
                             <NavItem iconText="🏠" label="Home" isActive={activeTab === 'home'} onClick={() => setActiveTab('home')} />
                             <NavItem iconText="🧭" label="Explore" isActive={activeTab === 'explore'} onClick={() => setActiveTab('explore')} />
                             <NavItem iconText="📱" label="Scan" isActive={activeTab === 'scan'} onClick={() => setActiveTab('scan')} />
-                            <NavItem iconText="🔔" label="Notify" isActive={activeTab === 'notification'} onClick={() => setActiveTab('notification')} />
+                            <NavItem iconText="🔔" label="Notify" isActive={activeTab === 'notification'} onClick={() => { setActiveTab('notification'); setNotificationSubView('main'); }} />
                             <NavItem iconText="👤" label="Profile" isActive={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
                         </div>
                     </nav>

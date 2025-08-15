@@ -9,6 +9,7 @@
     <!-- Google Fonts - Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- React, ReactDOM, and Babel CDNs -->
+    <!-- Corrected order: React first, then ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -137,31 +138,32 @@
         };
 
         // --- Rewards Catalog Data ---
+        // Added 'cost' property for each reward
         const rewardsCatalogData = {
             airport: [
-                { id: 'freeParking', name: 'Free Parking at Airport', description: 'Enjoy complimentary parking at participating InJourney Airports.', claimed: false },
-                { id: 'dutyFreeVoucher', name: 'Voucher Airport Duty Free Rp50.000', description: 'Get a Rp50,000 discount at Airport Duty Free shops.', claimed: false },
-                { id: 'loungeAccess', name: 'Lounge Access Pass', description: 'One-time complimentary access to selected airport lounges.', claimed: false },
+                { id: 'freeParking', name: 'Free Parking at Airport', description: 'Enjoy complimentary parking at participating InJourney Airports.', cost: 0 }, // Cost changed to 0
+                { id: 'dutyFreeVoucher', name: 'Voucher Airport Duty Free Rp50.000', description: 'Get a Rp50,000 discount at Airport Duty Free shops.', cost: 320 },
+                { id: 'loungeAccess', name: 'Lounge Access Pass', description: 'One-time complimentary access to selected airport lounges.', cost: 500 },
             ],
             hotel: [
-                { id: 'welcomeDrink', name: 'Complimentary Welcome Drink', description: 'Receive a free welcome drink upon check-in at any InJourney hotel.', claimed: false },
-                { id: 'lateCheckout', name: 'Late Check-out (2 PM)', description: 'Extend your stay until 2 PM at no extra charge.', claimed: false },
-                { id: 'roomUpgrade', name: 'Complimentary Room Upgrade', description: 'Subject to availability at participating hotels.', claimed: false },
+                { id: 'welcomeDrink', name: 'Complimentary Welcome Drink', description: 'Receive a free welcome drink upon check-in at any InJourney hotel.', cost: 100 },
+                { id: 'lateCheckout', name: 'Late Check-out (2 PM)', description: 'Extend your stay until 2 PM at no extra charge.', cost: 200 },
+                { id: 'roomUpgrade', name: 'Complimentary Room Upgrade', description: 'Subject to availability at participating hotels.', cost: 750 },
             ],
             destination: [
-                { id: 'tmiiDiscount', name: '15% Off TMII Tickets', description: 'Get a discount on entry tickets to Taman Mini Indonesia Indah.', claimed: false },
-                { id: 'borobudurTour', name: 'Guided Borobudur Tour', description: 'Complimentary guided tour at Borobudur Temple.', claimed: false },
-                { id: 'ratubokoEntry', name: 'Free Ratu Boko Entry', description: 'Complimentary entry to Ratu Boko Temple.', claimed: false },
+                { id: 'tmiiDiscount', name: '15% Off TMII Tickets', description: 'Get a discount on entry tickets to Taman Mini Indonesia Indah.', cost: 180 },
+                { id: 'borobudurTour', name: 'Guided Borobudur Tour', description: 'Complimentary guided tour at Borobudur Temple.', cost: 400 },
+                { id: 'ratubokoEntry', name: 'Free Ratu Boko Entry', description: 'Complimentary entry to Ratu Boko Temple.', cost: 250 },
             ],
             events: [
-                { id: 'eventDiscount', name: '10% Off Event Tickets', description: 'Discount on tickets for upcoming InJourney events.', claimed: false },
-                { id: 'vipAccess', name: 'VIP Event Access', description: 'Exclusive VIP access to select InJourney events.', claimed: false },
-                { id: 'meetGreet', name: 'Artist Meet & Greet Pass', description: 'Opportunity to meet artists at select events.', claimed: false },
+                { id: 'eventDiscount', name: '10% Off Event Tickets', description: 'Discount on tickets for upcoming InJourney events.', cost: 220 },
+                { id: 'vipAccess', name: 'VIP Event Access', description: 'Exclusive VIP access to select InJourney events.', cost: 600 },
+                { id: 'meetGreet', name: 'Artist Meet & Greet Pass', description: 'Opportunity to meet artists at select events.', cost: 800 },
             ],
             retail: [
-                { id: 'sarinahVoucher', name: 'Rp25.000 Sarinah Voucher', description: 'Voucher for your next purchase at Sarinah stores.', claimed: false },
-                { id: 'merchandiseDiscount', name: '20% Off Official Merchandise', description: 'Discount on official InJourney merchandise.', claimed: false },
-                { id: 'foodBeverage', name: 'Free Coffee at Sarinah Cafe', description: 'Enjoy a complimentary coffee at Sarinah Cafe.', claimed: false },
+                { id: 'sarinahVoucher', name: 'Rp25.000 Sarinah Voucher', description: 'Voucher for your next purchase at Sarinah stores.', cost: 120 },
+                { id: 'merchandiseDiscount', name: '20% Off Official Merchandise', description: 'Discount on official InJourney merchandise.', cost: 300 },
+                { id: 'foodBeverage', name: 'Free Coffee at Sarinah Cafe', description: 'Enjoy a complimentary coffee at Sarinah Cafe.', cost: 80 },
             ],
         };
 
@@ -200,6 +202,7 @@
             // --- Profile Tab Specific States ---
             const [selectedTier, setSelectedTier] = useState('gold'); // Default to Gold tier
             const [selectedRewardCategory, setSelectedRewardCategory] = useState('airport'); // Default to Airport rewards
+            const [claimedRewards, setClaimedRewards] = useState({}); // Stores { rewardId: true } for claimed rewards
 
 
             // Sample data for Explore section (unchanged)
@@ -236,6 +239,11 @@
                 setLastDailyReset(localStorage.getItem('lastDailyReset') || '');
                 setLastWeeklyReset(localStorage.getItem('lastWeeklyReset') || '');
                 setLastMonthlyReset(localStorage.getItem('lastMonthlyReset') || '');
+                // Load claimed rewards from local storage
+                const storedClaimedRewards = localStorage.getItem('injourneyClaimedRewards');
+                if (storedClaimedRewards) {
+                    setClaimedRewards(JSON.parse(storedClaimedRewards));
+                }
             }, []);
 
             useEffect(() => {
@@ -252,6 +260,12 @@
                 // Save missions to local storage whenever they change
                 localStorage.setItem('injourneyMissions', JSON.stringify(missions));
             }, [missions]);
+
+            useEffect(() => {
+                // Save claimed rewards to local storage whenever they change
+                localStorage.setItem('injourneyClaimedRewards', JSON.stringify(claimedRewards));
+            }, [claimedRewards]);
+
 
             // --- Mission Reset Logic ---
             useEffect(() => {
@@ -435,6 +449,24 @@
                 });
                 setJourneyPoints(prevPoints => prevPoints + points);
                 showMessage(`Mission completed! You earned ${points} Journey Points.`);
+            };
+
+            // --- Reward Claim Logic ---
+            const handleClaimReward = (rewardId, cost, rewardName) => {
+                if (cost > 0 && journeyPoints < cost) { // Check points only if cost is greater than 0
+                    showMessage(`Not enough Journey Points to claim "${rewardName}". Need ${cost} points.`, 'error');
+                    return;
+                }
+                if (claimedRewards[rewardId]) {
+                    showMessage(`"${rewardName}" has already been claimed.`, 'error');
+                    return;
+                }
+
+                if (cost > 0) { // Deduct points only if cost is greater than 0
+                    setJourneyPoints(prevPoints => prevPoints - cost);
+                }
+                setClaimedRewards(prev => ({ ...prev, [rewardId]: true }));
+                showMessage(`You claimed "${rewardName}"! ${cost > 0 ? `Points deducted: ${cost}.` : 'It\'s free!'}`);
             };
 
             // --- Render Content Based on Active Tab ---
@@ -880,6 +912,7 @@
                                                             <li key={index}>{benefit}</li>
                                                         ))}
                                                     </ul>
+                                                    {/* Note for Priority Services */}
                                                     {['basic', 'silver', 'gold'].includes(selectedTier) && (
                                                         <p className="text-xs text-gray-500 mt-2">
                                                             *Priority Services & Vouchers are only available for Platinum & Diamond tiers.
@@ -904,7 +937,7 @@
                                             >
                                                 <span className="text-2xl mb-1">
                                                     {categoryKey === 'airport' && '🛫'}
-                                                    {categoryKey === 'hotel' && '🏨'}
+                                                    {categoryKey === 'hotel' && '�'}
                                                     {categoryKey === 'destination' && '🗺️'}
                                                     {categoryKey === 'events' && '🎉'}
                                                     {categoryKey === 'retail' && '🛍️'}
@@ -917,17 +950,39 @@
                                     {/* Display Rewards for Selected Category */}
                                     {selectedRewardCategory && (
                                         <div className="space-y-3">
-                                            <h4 className="font-semibold text-gray-800 mb-2 capitalize">{rewardsCatalogData[selectedRewardCategory].length > 0 ? `${selectedRewardCategory} Rewards` : `No ${selectedRewardCategory} Rewards Available`}</h4>
+                                            <h4 className="font-semibold text-gray-800 mb-2 capitalize">
+                                                {rewardsCatalogData[selectedRewardCategory].length > 0 ? `${selectedRewardCategory} Rewards` : `No ${selectedRewardCategory} Rewards Available`}
+                                            </h4>
                                             {rewardsCatalogData[selectedRewardCategory].length > 0 ? (
-                                                rewardsCatalogData[selectedRewardCategory].map(reward => (
-                                                    <div key={reward.id} className="border border-gray-200 p-3 rounded-md bg-gray-50 flex justify-between items-center">
-                                                        <div>
-                                                            <h5 className="font-medium text-gray-800">{reward.name}</h5>
-                                                            <p className="text-xs text-gray-600">{reward.description}</p>
+                                                rewardsCatalogData[selectedRewardCategory].map(reward => {
+                                                    const isClaimed = claimedRewards[reward.id];
+                                                    const canClaim = journeyPoints >= reward.cost && !isClaimed;
+                                                    return (
+                                                        <div key={reward.id} className="border border-gray-200 p-3 rounded-md bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                                                            <div className="mb-2 sm:mb-0 sm:mr-4">
+                                                                <h5 className="font-medium text-gray-800">{reward.name}</h5>
+                                                                <p className="text-xs text-gray-600">{reward.description}</p>
+                                                                {reward.cost > 0 && ( // Only show cost if greater than 0
+                                                                    <p className="text-sm font-bold text-yellow-600 mt-1">🔸 Need {reward.cost} Journey Points</p>
+                                                                )}
+                                                                {reward.cost === 0 && ( // Show "Free" if cost is 0
+                                                                    <p className="text-sm font-bold text-green-600 mt-1">✨ Free Reward!</p>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleClaimReward(reward.id, reward.cost, reward.name)}
+                                                                disabled={!canClaim}
+                                                                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-200 w-full sm:w-auto
+                                                                    ${canClaim
+                                                                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                                                        : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                                                                    }`}
+                                                            >
+                                                                {isClaimed ? 'Claimed' : 'Claim'}
+                                                            </button>
                                                         </div>
-                                                        <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700 transition-colors">Claim</button>
-                                                    </div>
-                                                ))
+                                                    );
+                                                })
                                             ) : (
                                                 <p className="text-sm text-gray-600 text-center">Check back later for more rewards!</p>
                                             )}
